@@ -2,6 +2,8 @@
 
 A Flask-based web application for monitoring multiple RTSP camera streams in real-time with a modern Bulma CSS interface.
 
+![RTSP Camera Viewer Screenshot](screenshot.png)
+
 ## Features
 
 - **3 Camera Support** - Monitor up to 3 RTSP camera streams simultaneously
