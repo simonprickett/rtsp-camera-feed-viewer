@@ -14,16 +14,10 @@ const retryTimeouts = {};
 const healthCheckTimeouts = {};
 
 // Store last frame update time for each camera
-const lastFrameUpdate = {
-    1: Date.now(),
-    2: Date.now(),
-    3: Date.now()
-};
-const cameraQuality = {
-    1: 'main',
-    2: 'main',
-    3: 'main'
-};
+const lastFrameUpdate = {};
+
+// Store camera quality preferences
+const cameraQuality = {};
 
 /**
  * Check if stream is actually receiving frames
@@ -261,16 +255,32 @@ function toggleQuality(cameraId, quality) {
 }
 
 /**
+ * Get all camera IDs from the DOM
+ */
+function getAllCameraIds() {
+    const cameraElements = document.querySelectorAll('[id^="stream-"]');
+    const cameraIds = [];
+    cameraElements.forEach(el => {
+        const match = el.id.match(/^stream-(\d+)$/);
+        if (match) {
+            cameraIds.push(parseInt(match[1]));
+        }
+    });
+    return cameraIds;
+}
+
+/**
  * Load saved quality preferences
  */
 function loadQualityPreferences() {
-    for (let cameraId = 1; cameraId <= 3; cameraId++) {
+    const cameraIds = getAllCameraIds();
+    cameraIds.forEach(cameraId => {
         const savedQuality = localStorage.getItem(`camera_${cameraId}_quality`);
         if (savedQuality && (savedQuality === 'main' || savedQuality === 'sub')) {
             // Apply saved preference
             toggleQuality(cameraId, savedQuality);
         }
-    }
+    });
 }
 
 /**
@@ -279,8 +289,17 @@ function loadQualityPreferences() {
 function init() {
     console.log('Initializing RTSP Camera Viewer');
     
-    // Initialize TV static for all cameras
-    for (let cameraId = 1; cameraId <= 3; cameraId++) {
+    // Get all camera IDs from the DOM
+    const cameraIds = getAllCameraIds();
+    console.log(`Found ${cameraIds.length} cameras: ${cameraIds.join(', ')}`);
+    
+    // Initialize each camera
+    cameraIds.forEach(cameraId => {
+        // Initialize tracking objects
+        lastFrameUpdate[cameraId] = Date.now();
+        cameraQuality[cameraId] = 'main';
+        
+        // Initialize TV static canvas
         initStaticCanvas(cameraId);
         
         // Set up error handler for stream images
@@ -293,7 +312,7 @@ function init() {
                 checkStreamHealth(cameraId);
             }, 2000);
         }
-    }
+    });
     
     // Add click handlers to quality buttons
     const qualityButtons = document.querySelectorAll('.quality-btn');
