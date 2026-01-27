@@ -1,0 +1,20 @@
+[
+  {
+    "id": 1,
+    "name": "Camera 1",
+    "url": "rtsp://thingino:thingino@sonoff-cam-1.local:554/ch0",
+    "enabled": true
+  },
+  {
+    "id": 2,
+    "name": "Camera 2",
+    "url": "rtsp://thingino:thingino@sonoff-cam-2.local:554/ch0",
+    "enabled": true
+  },
+  {
+    "id": 3,
+    "name": "Camera 3",
+    "url": "rtsp://thingino:thingino@sonoff-cam-3.local:554/ch0",
+    "enabled": true
+  }
+]

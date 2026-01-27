@@ -6,7 +6,7 @@ A Flask-based web application for monitoring multiple RTSP camera streams in rea
 
 ## Features
 
-- **3 Camera Support** - Monitor up to 3 RTSP camera streams simultaneously
+- **Flexible Camera Support** - Monitor any number of RTSP camera streams configured via JSON
 - **Quality Toggle** - Switch between main (ch0/HD) and sub (ch1/SD) streams on the fly
 - **Auto-Reconnect** - Automatic reconnection when camera feeds drop
 - **TV Static Animation** - Animated static display when cameras are offline
@@ -40,29 +40,45 @@ The required packages are:
 
 3. **Configure your cameras**
 
-Copy the example environment file:
+Edit `cameras.json` to add your camera configurations:
+
+```json
+[
+  {
+    "id": 1,
+    "name": "Front Door",
+    "url": "rtsp://thingino:thingino@sonoff-cam-1.local:554/ch0",
+    "enabled": true
+  },
+  {
+    "id": 2,
+    "name": "Backyard",
+    "url": "rtsp://thingino:thingino@sonoff-cam-2.local:554/ch0",
+    "enabled": true
+  },
+  {
+    "id": 3,
+    "name": "Garage",
+    "url": "rtsp://thingino:thingino@sonoff-cam-3.local:554/ch0",
+    "enabled": true
+  }
+]
+```
+
+**Optional**: Copy and edit `.env` for stream settings:
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and add your camera URLs:
+Edit `.env` for optional stream configuration:
 
 ```env
-# Camera Configuration
-CAM_1=rtsp://thingino:thingino@sonoff-cam-1.local:554/ch0
-CAM_2=rtsp://thingino:thingino@sonoff-cam-2.local:554/ch0
-CAM_3=rtsp://thingino:thingino@sonoff-cam-3.local:554/ch0
-
-# Optional: Camera display names
-CAM_1_NAME=Front Door
-CAM_2_NAME=Backyard
-CAM_3_NAME=Garage
-
 # Stream Settings (optional)
 JPEG_QUALITY=80
 RETRY_INTERVAL=5
 STREAM_TIMEOUT=10
+FLASK_PORT=8080
 ```
 
 **RTSP URL Format:**
@@ -102,14 +118,26 @@ Your quality preferences are saved automatically.
 
 ## Configuration Options
 
-### Environment Variables
+### Camera Configuration (cameras.json)
+
+Each camera entry supports:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `id` | Yes | Unique numeric camera identifier |
+| `name` | Yes | Display name for the camera |
+| `url` | Yes | RTSP camera URL (format: `rtsp://username:password@hostname:port/path`) |
+| `enabled` | No | Enable/disable camera (default: true) |
+
+Add or remove cameras as needed - the application dynamically loads all enabled cameras.
+
+### Environment Variables (.env)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CAM_1`, `CAM_2808`CAM_3` | - | RTSP camera URLs |
-| `CAM_1_NAME`, `CAM_2_NAME`, `CAM_3_NAME` | Camera 1/2/3 | Display names |
 | `FLASK_PORT` | 5000 | Web server port |
 | `FLASK_DEBUG` | False | Enable debug mode |
+| `FLASK_SECRET_KEY` | - | Flask secret key for sessions |
 | `JPEG_QUALITY` | 80 | JPEG compression quality (1-100) |
 | `RETRY_INTERVAL` | 5 | Seconds between reconnection attempts |
 | `STREAM_TIMEOUT` | 10 | Connection timeout in seconds |
@@ -159,8 +187,9 @@ Your quality preferences are saved automatically.
 rtsp-cam-viewer/
 ├── app.py                  # Flask application and routes
 ├── config.py               # Configuration management
+├── cameras.json            # Camera configurations
 ├── requirements.txt        # Python dependencies
-├── .env                    # Environment variables (create from .env.example)
+├── .env                    # Environment variables (optional)
 ├── .env.example           # Example configuration
 ├── .gitignore             # Git ignore rules
 │
@@ -188,7 +217,8 @@ rtsp-cam-viewer/
 
 ## Security Notes
 
-- **Never commit `.env`** - Contains camera credentials
+- **Protect `cameras.json`** - Contains camera credentials and URLs
+- **Never commit credentials** - Consider using environment variables for passwords
 - **Use strong passwords** - Change default camera passwords
 - **Network isolation** - Consider VLANs or separate networks for cameras
 - **HTTPS in production** - Use reverse proxy (nginx, Apache) with SSL

@@ -1,4 +1,5 @@
 import os
+import json
 from dotenv import load_dotenv
 
 # Load environment variables
@@ -12,21 +13,37 @@ class Config:
     PORT = int(os.getenv('FLASK_PORT', 5000))
     DEBUG = os.getenv('FLASK_DEBUG', 'False').lower() == 'true'
     
-    # Camera configurations
-    CAMERAS = {
-        1: {
-            'url': os.getenv('CAM_1', ''),
-            'name': os.getenv('CAM_1_NAME', 'Camera 1')
-        },
-        2: {
-            'url': os.getenv('CAM_2', ''),
-            'name': os.getenv('CAM_2_NAME', 'Camera 2')
-        },
-        3: {
-            'url': os.getenv('CAM_3', ''),
-            'name': os.getenv('CAM_3_NAME', 'Camera 3')
-        }
-    }
+    # Camera configurations - loaded from JSON file
+    CAMERAS = {}
+    
+    @staticmethod
+    def load_cameras():
+        """Load camera configurations from cameras.json"""
+        try:
+            cameras_file = os.path.join(os.path.dirname(__file__), 'cameras.json')
+            with open(cameras_file, 'r') as f:
+                cameras_list = json.load(f)
+            
+            # Convert list to dictionary keyed by camera ID
+            Config.CAMERAS = {}
+            for camera in cameras_list:
+                if camera.get('enabled', True):  # Only load enabled cameras
+                    camera_id = camera['id']
+                    Config.CAMERAS[camera_id] = {
+                        'url': camera['url'],
+                        'name': camera['name']
+                    }
+            
+            return True
+        except FileNotFoundError:
+            print("Warning: cameras.json not found. No cameras configured.")
+            return False
+        except json.JSONDecodeError as e:
+            print(f"Error parsing cameras.json: {e}")
+            return False
+        except Exception as e:
+            print(f"Error loading cameras: {e}")
+            return False
     
     # Stream settings
     JPEG_QUALITY = int(os.getenv('JPEG_QUALITY', 80))

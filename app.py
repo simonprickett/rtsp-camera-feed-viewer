@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.config.from_object(Config)
 
+# Load camera configurations from JSON
+if not Config.load_cameras():
+    logger.warning("Failed to load camera configurations")
+
 # Store active stream handlers
 stream_handlers = {}
 
@@ -25,7 +29,7 @@ stream_handlers = {}
 def index():
     """Main page displaying all camera streams"""
     cameras = []
-    for camera_id in range(1, 4):  # Cameras 1, 2, 3
+    for camera_id in sorted(Config.CAMERAS.keys()):
         camera_info = {
             'id': camera_id,
             'name': Config.get_camera_name(camera_id),
@@ -46,7 +50,7 @@ def video_feed(camera_id, quality):
         quality: Stream quality ('main' for ch0, 'sub' for ch1)
     """
     # Validate camera_id
-    if camera_id not in [1, 2, 3]:
+    if camera_id not in Config.CAMERAS:
         logger.error(f"Invalid camera ID: {camera_id}")
         return "Invalid camera ID", 404
     
@@ -97,7 +101,7 @@ def video_feed(camera_id, quality):
 def get_cameras():
     """API endpoint to get camera information"""
     cameras = []
-    for camera_id in range(1, 4):
+    for camera_id in sorted(Config.CAMERAS.keys()):
         camera_info = {
             'id': camera_id,
             'name': Config.get_camera_name(camera_id),
