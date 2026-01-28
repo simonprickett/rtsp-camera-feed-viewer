@@ -49,7 +49,12 @@ class Config:
     JPEG_QUALITY = int(os.getenv('JPEG_QUALITY', 80))
     RETRY_INTERVAL = int(os.getenv('RETRY_INTERVAL', 5))
     STREAM_TIMEOUT = int(os.getenv('STREAM_TIMEOUT', 10))
-    
+
+    # Motion detection settings
+    MOTION_DETECTION_ENABLED = os.getenv('MOTION_DETECTION_ENABLED', 'False').lower() == 'true'
+    MOTION_SENSITIVITY = os.getenv('MOTION_SENSITIVITY', 'medium')  # low, medium, high
+    MOTION_MIN_AREA = int(os.getenv('MOTION_MIN_AREA', 500))  # Minimum contour area in pixels
+
     @staticmethod
     def get_camera_url(camera_id, quality='main'):
         """Get camera URL with specified quality (main=ch0, sub=ch1)"""

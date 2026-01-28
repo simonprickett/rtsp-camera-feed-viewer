@@ -47,8 +47,8 @@
                                     <div class="level-item">
                                         <div class="field has-addons">
                                             <p class="control">
-                                                <button class="button is-small quality-btn active" 
-                                                        data-camera="{{ camera.id }}" 
+                                                <button class="button is-small quality-btn active"
+                                                        data-camera="{{ camera.id }}"
                                                         data-quality="main"
                                                         title="High Quality (ch0)">
                                                     <span>●</span>
@@ -56,8 +56,8 @@
                                                 </button>
                                             </p>
                                             <p class="control">
-                                                <button class="button is-small quality-btn" 
-                                                        data-camera="{{ camera.id }}" 
+                                                <button class="button is-small quality-btn"
+                                                        data-camera="{{ camera.id }}"
                                                         data-quality="sub"
                                                         title="Lower Quality (ch1)">
                                                     <span>●</span>
@@ -65,6 +65,17 @@
                                                 </button>
                                             </p>
                                         </div>
+                                    </div>
+                                    <div class="level-item">
+                                        <!-- Motion detection toggle -->
+                                        <button class="button is-small motion-toggle-btn"
+                                                id="motion-toggle-{{ camera.id }}"
+                                                data-camera="{{ camera.id }}"
+                                                title="Toggle Motion Detection">
+                                            <span class="icon">
+                                                <span class="motion-icon">👁️</span>
+                                            </span>
+                                        </button>
                                     </div>
                                 </div>
                             </div>
@@ -113,6 +124,13 @@
                                 <span class="tag is-light" id="quality-tag-{{ camera.id }}">
                                     Main Stream (ch0)
                                 </span>
+                                <!-- Motion detection status badge -->
+                                <span class="tag motion-status-badge"
+                                      id="motion-status-{{ camera.id }}"
+                                      style="display: none;">
+                                    <span class="motion-pulse">●</span>
+                                    <span>Motion</span>
+                                </span>
                             </div>
                         </div>
                     </div>
@@ -125,6 +143,7 @@
                 <p><strong>Tips:</strong></p>
                 <ul>
                     <li>Toggle between <strong>HD</strong> (main/ch0) and <strong>SD</strong> (sub/ch1) streams to manage bandwidth</li>
+                    <li>Click the 👁️ button to enable motion detection with visual overlays</li>
                     <li>Streams automatically reconnect if connection is lost</li>
                     <li>TV static appears when camera is offline or unreachable</li>
                 </ul>

@@ -19,6 +19,12 @@ const lastFrameUpdate = {};
 // Store camera quality preferences
 const cameraQuality = {};
 
+// Store motion detection state for each camera
+const cameraMotionEnabled = {};
+
+// Store motion detection polling intervals
+const motionCheckIntervals = {};
+
 /**
  * Check if stream is actually receiving frames
  */
@@ -249,9 +255,118 @@ function toggleQuality(cameraId, quality) {
     // Save preference to localStorage
     localStorage.setItem(`camera_${cameraId}_quality`, quality);
     
-    // Update stream source
+    // Update stream source (preserve motion detection state)
     const timestamp = new Date().getTime();
-    streamImg.src = `/stream/${cameraId}/${quality}?t=${timestamp}`;
+    const motionEnabled = cameraMotionEnabled[cameraId] || false;
+    const motionParam = motionEnabled ? 'true' : 'false';
+    streamImg.src = `/stream/${cameraId}/${quality}?motion=${motionParam}&t=${timestamp}`;
+
+    // Restart motion polling with new quality
+    if (motionEnabled) {
+        startMotionStatusPolling(cameraId, quality);
+    }
+}
+
+/**
+ * Toggle motion detection for a camera
+ */
+function toggleMotionDetection(cameraId) {
+    console.log(`Toggling motion detection for camera ${cameraId}`);
+
+    const streamImg = document.getElementById(`stream-${cameraId}`);
+    const motionBtn = document.getElementById(`motion-toggle-${cameraId}`);
+    const motionBadge = document.getElementById(`motion-status-${cameraId}`);
+
+    if (!streamImg || !motionBtn) return;
+
+    // Toggle state
+    const currentState = cameraMotionEnabled[cameraId] || false;
+    const newState = !currentState;
+    cameraMotionEnabled[cameraId] = newState;
+
+    // Update button appearance
+    if (newState) {
+        motionBtn.classList.add('is-warning');
+        motionBtn.title = 'Motion Detection: ON (Click to disable)';
+    } else {
+        motionBtn.classList.remove('is-warning');
+        motionBtn.title = 'Motion Detection: OFF (Click to enable)';
+        // Hide motion badge when disabled
+        if (motionBadge) {
+            motionBadge.style.display = 'none';
+        }
+    }
+
+    // Save preference to localStorage
+    localStorage.setItem(`camera_${cameraId}_motion`, newState ? 'true' : 'false');
+
+    // Update stream URL with motion parameter
+    const quality = cameraQuality[cameraId] || 'main';
+    const timestamp = new Date().getTime();
+    const motionParam = newState ? 'true' : 'false';
+    streamImg.src = `/stream/${cameraId}/${quality}?motion=${motionParam}&t=${timestamp}`;
+
+    // Start or stop motion status polling
+    if (newState) {
+        startMotionStatusPolling(cameraId, quality);
+    } else {
+        stopMotionStatusPolling(cameraId);
+    }
+}
+
+/**
+ * Start polling for motion detection status
+ */
+function startMotionStatusPolling(cameraId, quality) {
+    // Clear existing interval if any
+    stopMotionStatusPolling(cameraId);
+
+    // Poll every 500ms
+    motionCheckIntervals[cameraId] = setInterval(() => {
+        checkMotionStatus(cameraId, quality);
+    }, 500);
+
+    // Initial check
+    checkMotionStatus(cameraId, quality);
+}
+
+/**
+ * Stop polling for motion detection status
+ */
+function stopMotionStatusPolling(cameraId) {
+    if (motionCheckIntervals[cameraId]) {
+        clearInterval(motionCheckIntervals[cameraId]);
+        delete motionCheckIntervals[cameraId];
+    }
+}
+
+/**
+ * Check motion detection status via API
+ */
+function checkMotionStatus(cameraId, quality) {
+    const motionBadge = document.getElementById(`motion-status-${cameraId}`);
+    if (!motionBadge) return;
+
+    fetch(`/api/motion/${cameraId}/${quality}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.motion_enabled && data.motion_detected) {
+                // Show motion badge with pulse animation
+                motionBadge.style.display = 'inline-flex';
+                motionBadge.classList.add('is-warning');
+            } else {
+                // Hide motion badge or show as inactive
+                if (data.motion_enabled) {
+                    motionBadge.style.display = 'inline-flex';
+                    motionBadge.classList.remove('is-warning');
+                } else {
+                    motionBadge.style.display = 'none';
+                }
+            }
+        })
+        .catch(error => {
+            console.error(`Error checking motion status for camera ${cameraId}:`, error);
+        });
 }
 
 /**
@@ -284,6 +399,38 @@ function loadQualityPreferences() {
 }
 
 /**
+ * Load saved motion detection preferences
+ */
+function loadMotionPreferences() {
+    const cameraIds = getAllCameraIds();
+    cameraIds.forEach(cameraId => {
+        const savedMotion = localStorage.getItem(`camera_${cameraId}_motion`);
+        if (savedMotion === 'true') {
+            // Enable motion detection
+            cameraMotionEnabled[cameraId] = true;
+
+            // Update button appearance
+            const motionBtn = document.getElementById(`motion-toggle-${cameraId}`);
+            if (motionBtn) {
+                motionBtn.classList.add('is-warning');
+                motionBtn.title = 'Motion Detection: ON (Click to disable)';
+            }
+
+            // Update stream URL
+            const quality = cameraQuality[cameraId] || 'main';
+            const streamImg = document.getElementById(`stream-${cameraId}`);
+            if (streamImg) {
+                const timestamp = new Date().getTime();
+                streamImg.src = `/stream/${cameraId}/${quality}?motion=true&t=${timestamp}`;
+            }
+
+            // Start polling
+            startMotionStatusPolling(cameraId, quality);
+        }
+    });
+}
+
+/**
  * Initialize application
  */
 function init() {
@@ -298,22 +445,23 @@ function init() {
         // Initialize tracking objects
         lastFrameUpdate[cameraId] = Date.now();
         cameraQuality[cameraId] = 'main';
-        
+        cameraMotionEnabled[cameraId] = false;
+
         // Initialize TV static canvas
         initStaticCanvas(cameraId);
-        
+
         // Set up error handler for stream images
         const streamImg = document.getElementById(`stream-${cameraId}`);
         if (streamImg) {
             streamImg.onerror = () => handleStreamError(cameraId);
-            
+
             // Start health check after a brief delay to allow initial load
             setTimeout(() => {
                 checkStreamHealth(cameraId);
             }, 2000);
         }
     });
-    
+
     // Add click handlers to quality buttons
     const qualityButtons = document.querySelectorAll('.quality-btn');
     qualityButtons.forEach(btn => {
@@ -323,14 +471,22 @@ function init() {
             toggleQuality(cameraId, quality);
         });
     });
-    
+
+    // Add click handlers to motion toggle buttons
+    const motionButtons = document.querySelectorAll('.motion-toggle-btn');
+    motionButtons.forEach(btn => {
+        btn.addEventListener('click', function() {
+            const cameraId = parseInt(this.dataset.camera);
+            toggleMotionDetection(cameraId);
+        });
+    });
+
     // Load saved preferences
     loadQualityPreferences();
-    
+    loadMotionPreferences();
+
     console.log('Initialization complete');
 }
-    // Clear all health check timeouts
-    Object.values(healthCheckTimeouts).forEach(timeout => clearTimeout(timeout));
 
 // Run initialization when DOM is ready
 if (document.readyState === 'loading') {
@@ -343,4 +499,10 @@ if (document.readyState === 'loading') {
 window.addEventListener('beforeunload', () => {
     // Clear all retry timeouts
     Object.values(retryTimeouts).forEach(timeout => clearTimeout(timeout));
+
+    // Clear all health check timeouts
+    Object.values(healthCheckTimeouts).forEach(timeout => clearTimeout(timeout));
+
+    // Clear all motion check intervals
+    Object.values(motionCheckIntervals).forEach(interval => clearInterval(interval));
 });

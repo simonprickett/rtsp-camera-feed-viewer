@@ -9,10 +9,122 @@ from threading import Lock
 logger = logging.getLogger(__name__)
 
 
+class MotionDetector:
+    """Handle motion detection using background subtraction"""
+
+    def __init__(self, sensitivity='medium', min_contour_area=500):
+        self.enabled = False
+        self.motion_detected = False
+        self.last_motion_time = 0
+        self.motion_timeout = 2.0  # seconds to keep "motion detected" state
+
+        # Sensitivity mapping to MOG2 varThreshold
+        sensitivity_map = {
+            'low': 32,      # Less sensitive, fewer false positives
+            'medium': 16,   # Balanced
+            'high': 8       # More sensitive, may have more false positives
+        }
+        var_threshold = sensitivity_map.get(sensitivity, 16)
+
+        # Initialize background subtractor
+        self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+            history=500,
+            varThreshold=var_threshold,
+            detectShadows=True
+        )
+
+        self.min_contour_area = min_contour_area
+        self.lock = Lock()
+
+    def detect_motion(self, frame):
+        """
+        Detect motion in frame and return annotated frame with bounding boxes
+
+        Returns:
+            tuple: (annotated_frame, motion_detected)
+        """
+        if not self.enabled:
+            return frame, False
+
+        # Check if frame is valid
+        if frame is None or frame.size == 0:
+            logger.warning("Invalid frame received for motion detection")
+            return frame, False
+
+        try:
+            with self.lock:
+                # Apply background subtraction
+                fg_mask = self.bg_subtractor.apply(frame)
+
+                # Remove shadows (set to 0)
+                fg_mask[fg_mask == 127] = 0
+
+                # Apply threshold to reduce noise
+                _, fg_mask = cv2.threshold(fg_mask, 244, 255, cv2.THRESH_BINARY)
+
+                # Morphological operations to reduce noise
+                kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+                fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_CLOSE, kernel)
+                fg_mask = cv2.morphologyEx(fg_mask, cv2.MORPH_OPEN, kernel)
+
+                # Find contours
+                contours, _ = cv2.findContours(fg_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+                # Filter contours by area and draw bounding boxes
+                motion_detected = False
+                annotated_frame = frame.copy()
+
+                for contour in contours:
+                    area = cv2.contourArea(contour)
+                    if area > self.min_contour_area:
+                        motion_detected = True
+                        # Draw bounding box
+                        x, y, w, h = cv2.boundingRect(contour)
+                        cv2.rectangle(annotated_frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+                # Update motion state
+                if motion_detected:
+                    self.motion_detected = True
+                    self.last_motion_time = time.time()
+                else:
+                    # Keep motion_detected True for timeout period
+                    if time.time() - self.last_motion_time > self.motion_timeout:
+                        self.motion_detected = False
+
+                # Add motion indicator overlay
+                if self.motion_detected:
+                    cv2.putText(annotated_frame, "MOTION DETECTED", (10, 30),
+                               cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+
+                return annotated_frame, self.motion_detected
+
+        except Exception as e:
+            logger.error(f"Error in motion detection: {e}", exc_info=True)
+            # Return original frame if motion detection fails
+            return frame, False
+
+    def set_enabled(self, enabled):
+        """Enable or disable motion detection"""
+        with self.lock:
+            self.enabled = enabled
+            if enabled:
+                # Reset background model when enabling
+                self.bg_subtractor = cv2.createBackgroundSubtractorMOG2(
+                    history=500,
+                    varThreshold=16,
+                    detectShadows=True
+                )
+
+    def is_motion_detected(self):
+        """Check if motion is currently detected"""
+        return self.motion_detected
+
+
 class StreamHandler:
     """Handle RTSP stream capture and MJPEG conversion"""
     
-    def __init__(self, rtsp_url, jpeg_quality=80, timeout=10, retry_interval=5):
+    def __init__(self, rtsp_url, jpeg_quality=80, timeout=10, retry_interval=5,
+                 enable_motion_detection=False, motion_sensitivity='medium', motion_min_area=500):
         self.rtsp_url = rtsp_url
         self.jpeg_quality = jpeg_quality
         self.timeout = timeout
@@ -21,6 +133,13 @@ class StreamHandler:
         self.lock = Lock()
         self.consecutive_failures = 0
         self.max_failures = 3
+
+        # Initialize motion detector
+        self.motion_detector = MotionDetector(
+            sensitivity=motion_sensitivity,
+            min_contour_area=motion_min_area
+        )
+        self.motion_detector.set_enabled(enable_motion_detection)
         
     def connect(self):
         """Initialize video capture connection"""
@@ -100,7 +219,13 @@ class StreamHandler:
                     
                     # Reset failure counter on success
                     self.consecutive_failures = 0
-                    
+
+                    # Apply motion detection if enabled
+                    if self.motion_detector.enabled:
+                        logger.debug("Applying motion detection to frame")
+                        frame, motion_detected = self.motion_detector.detect_motion(frame)
+                        logger.debug(f"Motion detection result: {motion_detected}")
+
                     # Encode frame as JPEG
                     encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), self.jpeg_quality]
                     ret, buffer = cv2.imencode('.jpg', frame, encode_param)
@@ -144,6 +269,15 @@ class StreamHandler:
                     b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         return b''
     
+    def set_motion_detection(self, enabled):
+        """Enable or disable motion detection"""
+        self.motion_detector.set_enabled(enabled)
+        logger.info(f"Motion detection {'enabled' if enabled else 'disabled'} for {self._sanitize_url(self.rtsp_url)}")
+
+    def is_motion_detected(self):
+        """Check if motion is currently detected"""
+        return self.motion_detector.is_motion_detected()
+
     def cleanup(self):
         """Release resources"""
         with self.lock:
